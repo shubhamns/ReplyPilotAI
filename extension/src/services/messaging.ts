@@ -1,25 +1,39 @@
 import type { AiRequest, AiResponse, ExtensionMessage, SelectionPayload } from '../types'
 import { DEFAULT_API_BASE } from '../types'
+import { isExtensionAlive, safeRuntimeSendMessage } from '../utils/runtime'
 
 export async function getApiBase(): Promise<string> {
-  const stored = await chrome.storage.local.get(['apiBase'])
-  return ((stored.apiBase as string) || DEFAULT_API_BASE).replace(/\/$/, '')
+  if (!isExtensionAlive()) return DEFAULT_API_BASE
+  try {
+    const stored = await chrome.storage.local.get(['apiBase'])
+    return ((stored.apiBase as string) || DEFAULT_API_BASE).replace(/\/$/, '')
+  } catch {
+    return DEFAULT_API_BASE
+  }
 }
 
 export async function setApiBase(apiBase: string): Promise<void> {
+  if (!isExtensionAlive()) throw new Error('Extension context invalidated')
   await chrome.storage.local.set({ apiBase: apiBase.replace(/\/$/, '') })
 }
 
 export async function getOpenAiApiKey(): Promise<string> {
-  const stored = await chrome.storage.local.get(['openaiApiKey'])
-  return (stored.openaiApiKey as string) || ''
+  if (!isExtensionAlive()) return ''
+  try {
+    const stored = await chrome.storage.local.get(['openaiApiKey'])
+    return (stored.openaiApiKey as string) || ''
+  } catch {
+    return ''
+  }
 }
 
 export async function setOpenAiApiKey(openaiApiKey: string): Promise<void> {
+  if (!isExtensionAlive()) throw new Error('Extension context invalidated')
   await chrome.storage.local.set({ openaiApiKey })
 }
 
 export async function ensureHostPermission(apiBase: string): Promise<boolean> {
+  if (!isExtensionAlive()) return false
   try {
     const url = new URL(apiBase)
     const origin = `${url.protocol}//${url.host}/*`
@@ -36,8 +50,13 @@ export function sendToTab<T = unknown>(tabId: number, message: ExtensionMessage)
 }
 
 export async function getActiveTab(): Promise<chrome.tabs.Tab | undefined> {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-  return tab
+  if (!isExtensionAlive()) return undefined
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+    return tab
+  } catch {
+    return undefined
+  }
 }
 
 export async function getSelectionFromActiveTab(): Promise<SelectionPayload> {
@@ -63,30 +82,14 @@ export async function replaceTextInActiveTab(text: string): Promise<boolean> {
 }
 
 export async function runAiAction(request: AiRequest): Promise<AiResponse> {
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(
-      { type: 'RUN_AI', payload: request } satisfies ExtensionMessage,
-      (response: ExtensionMessage | undefined) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message))
-          return
-        }
-        if (!response) {
-          reject(new Error('No response from background'))
-          return
-        }
-        if (response.type === 'AI_RESULT') {
-          resolve(response.payload)
-          return
-        }
-        if (response.type === 'AI_ERROR') {
-          reject(new Error(response.payload.message))
-          return
-        }
-        reject(new Error('Unexpected response'))
-      },
-    )
-  })
+  const response = await safeRuntimeSendMessage<ExtensionMessage>({
+    type: 'RUN_AI',
+    payload: request,
+  } satisfies ExtensionMessage)
+  if (!response) throw new Error('No response from background')
+  if (response.type === 'AI_RESULT') return response.payload
+  if (response.type === 'AI_ERROR') throw new Error(response.payload.message)
+  throw new Error('Unexpected response')
 }
 
 export async function copyToClipboard(text: string): Promise<void> {
@@ -110,4 +113,3 @@ export async function copyToClipboard(text: string): Promise<void> {
   el.remove()
   if (!ok) throw new Error('Copy failed')
 }
-

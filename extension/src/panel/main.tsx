@@ -2,24 +2,24 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { AssistantApp } from '../components/AssistantApp'
 import type { AiAction, ExtensionMessage } from '../types'
+import { isExtensionAlive, safeRuntimeSendMessage } from '../utils/runtime'
 import '../styles/index.css'
 
 const params = new URLSearchParams(window.location.search)
 const sid = params.get('sid') || ''
 
-function loadPayload(id: string): Promise<{ text: string; editable: boolean; action?: AiAction | null } | null> {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage(
-      { type: 'GET_PANEL_PAYLOAD', payload: { id } } satisfies ExtensionMessage,
-      (response: ExtensionMessage | undefined) => {
-        if (chrome.runtime.lastError || response?.type !== 'PANEL_PAYLOAD_RESULT') {
-          resolve(null)
-          return
-        }
-        resolve(response.payload)
-      },
-    )
-  })
+async function loadPayload(id: string): Promise<{ text: string; editable: boolean; action?: AiAction | null } | null> {
+  if (!isExtensionAlive()) return null
+  try {
+    const response = await safeRuntimeSendMessage<ExtensionMessage>({
+      type: 'GET_PANEL_PAYLOAD',
+      payload: { id },
+    } satisfies ExtensionMessage)
+    if (response?.type !== 'PANEL_PAYLOAD_RESULT') return null
+    return response.payload
+  } catch {
+    return null
+  }
 }
 
 async function boot(): Promise<void> {

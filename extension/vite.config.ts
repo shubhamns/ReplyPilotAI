@@ -8,6 +8,7 @@ export default defineConfig({
   base: './',
   plugins: [react(), tailwindcss(), crx({ manifest })],
   build: {
+    modulePreload: false,
     rollupOptions: {
       input: {
         panel: 'src/panel/index.html',

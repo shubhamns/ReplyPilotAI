@@ -1,25 +1,16 @@
 import type { AiAction, ExtensionMessage } from '../types'
+import { isExtensionAlive, safeRuntimeSendMessage } from '../utils/runtime'
 
 const PANEL_ID = 'replypilot-panel-iframe'
 const PANEL_WIDTH = 360
 
-function storePanelPayload(payload: { text: string; editable: boolean; action?: AiAction | null }): Promise<string> {
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(
-      { type: 'STORE_PANEL_PAYLOAD', payload } satisfies ExtensionMessage,
-      (response: ExtensionMessage | undefined) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message))
-          return
-        }
-        if (response?.type === 'PANEL_PAYLOAD_STORED') {
-          resolve(response.payload.id)
-          return
-        }
-        reject(new Error('Failed to store panel payload'))
-      },
-    )
-  })
+async function storePanelPayload(payload: { text: string; editable: boolean; action?: AiAction | null }): Promise<string> {
+  const response = await safeRuntimeSendMessage<ExtensionMessage>({
+    type: 'STORE_PANEL_PAYLOAD',
+    payload,
+  } satisfies ExtensionMessage)
+  if (response?.type === 'PANEL_PAYLOAD_STORED') return response.payload.id
+  throw new Error('Failed to store panel payload')
 }
 
 function clamp(n: number, min: number, max: number): number {
@@ -28,13 +19,16 @@ function clamp(n: number, min: number, max: number): number {
 
 export function openActionPanel(opts: { text: string; editable: boolean; action?: AiAction | null; anchor?: DOMRect | null }): void {
   closeActionPanel()
+  if (!isExtensionAlive()) return
   void (async () => {
     try {
+      if (!isExtensionAlive()) return
       const id = await storePanelPayload({
         text: opts.text,
         editable: opts.editable,
         action: opts.action ?? null,
       })
+      if (!isExtensionAlive()) return
       const iframe = document.createElement('iframe')
       iframe.id = PANEL_ID
       const params = new URLSearchParams()
@@ -63,7 +57,7 @@ export function openActionPanel(opts: { text: string; editable: boolean; action?
       ].join(';')
       document.documentElement.appendChild(iframe)
     } catch {
-      // ignore open failures on restricted pages
+      closeActionPanel()
     }
   })()
 }
