@@ -14,4 +14,6 @@ __pycache__
 extension/dist
 backend/.env
 extension/.env
+backend/data/
+*.db
 replypilot-ai-extension.zip

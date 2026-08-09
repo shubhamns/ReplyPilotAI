@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ensureHostPermission, getApiBase, getOpenAiApiKey, setApiBase, setOpenAiApiKey } from '../services/messaging'
+import { ensureHostPermission, getApiBase, getAccessToken, hasSavedKey, registerOpenAiKey, setAccessToken, setApiBase } from '../services/messaging'
 import { Button } from './Button'
 
 interface SettingsPanelProps {
@@ -10,14 +10,16 @@ interface SettingsPanelProps {
 export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const [base, setBase] = useState('')
   const [openaiKey, setOpenaiKey] = useState('')
+  const [hasKey, setHasKey] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) return
-    void Promise.all([getApiBase(), getOpenAiApiKey()]).then(([b, k]) => {
+    void Promise.all([getApiBase(), hasSavedKey()]).then(([b, saved]) => {
       setBase(b)
-      setOpenaiKey(k)
+      setHasKey(saved)
+      setOpenaiKey('')
       setSaving(false)
       setError(null)
     })
@@ -44,10 +46,10 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         value={openaiKey}
         onChange={(e) => { setOpenaiKey(e.target.value); setError(null) }}
         className="mb-2 h-8 w-full rounded-lg border border-border bg-surface px-2 text-xs text-ink outline-none focus:border-brand-400"
-        placeholder="sk-..."
+        placeholder={hasKey ? '•••••••• (saved on backend)' : 'sk-...'}
         autoComplete="off"
       />
-      <p className="mb-2 text-[10px] leading-relaxed text-ink-muted">Stored only in this browser. Each developer can use their own key and hosted API URL.</p>
+      <p className="mb-2 text-[10px] leading-relaxed text-ink-muted">Saved encrypted on your backend (SQLite). Not kept in the extension.</p>
       {error && <p className="mb-2 text-xs text-red-500 leading-relaxed">{error}</p>}
       <Button
         size="sm"
@@ -63,7 +65,8 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               setSaving(false)
               return
             }
-            if (!openaiKey.trim()) {
+            const existing = await getAccessToken()
+            if (!openaiKey.trim() && !existing) {
               setError('OpenAI API key is required')
               setSaving(false)
               return
@@ -76,11 +79,14 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             }
             try {
               await setApiBase(nextBase)
-              await setOpenAiApiKey(openaiKey.trim())
+              if (openaiKey.trim()) {
+                const token = await registerOpenAiKey(nextBase, openaiKey.trim())
+                await setAccessToken(token)
+              }
               setSaving(false)
               onClose()
-            } catch {
-              setError('Could not save settings')
+            } catch (err) {
+              setError(err instanceof Error ? err.message : 'Could not save settings')
               setSaving(false)
             }
           })()

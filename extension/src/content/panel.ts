@@ -31,6 +31,7 @@ export function openActionPanel(opts: { text: string; editable: boolean; action?
       if (!isExtensionAlive()) return
       const iframe = document.createElement('iframe')
       iframe.id = PANEL_ID
+      iframe.setAttribute('allow', 'clipboard-write')
       const params = new URLSearchParams()
       params.set('sid', id)
       iframe.src = chrome.runtime.getURL(`src/panel/index.html?${params.toString()}`)

@@ -16,9 +16,9 @@ async function getApiBase(): Promise<string> {
   return ((stored.apiBase as string) || DEFAULT_API_BASE).replace(/\/$/, '')
 }
 
-async function getOpenAiApiKey(): Promise<string> {
-  const stored = await chrome.storage.local.get(['openaiApiKey'])
-  return (stored.openaiApiKey as string) || ''
+async function getAccessToken(): Promise<string> {
+  const stored = await chrome.storage.local.get(['accessToken'])
+  return (stored.accessToken as string) || ''
 }
 
 function endpointFor(action: AiAction): string {
@@ -33,8 +33,8 @@ function endpointFor(action: AiAction): string {
 
 async function callBackend(request: AiRequest): Promise<AiResponse> {
   const base = await getApiBase()
-  const openaiKey = await getOpenAiApiKey()
-  if (!openaiKey) {
+  const accessToken = await getAccessToken()
+  if (!accessToken) {
     throw new Error('Add your OpenAI API key in Settings')
   }
   const body: Record<string, string> = { text: request.text }
@@ -47,7 +47,7 @@ async function callBackend(request: AiRequest): Promise<AiResponse> {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-OpenAI-Key': openaiKey,
+        'X-API-Key': accessToken,
       },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(60000),

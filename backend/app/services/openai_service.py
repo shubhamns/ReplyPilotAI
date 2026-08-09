@@ -5,7 +5,7 @@ MODEL = "gpt-4o-mini"
 def require_api_key(request_key: str | None) -> str:
     key = (request_key or "").strip()
     if not key:
-        raise RuntimeError("OpenAI API key required. Add it in the extension Settings.")
+        raise RuntimeError("OpenAI API key is not configured for this account.")
     return key
 
 async def complete(system: str, user: str, api_key: str | None = None) -> str:

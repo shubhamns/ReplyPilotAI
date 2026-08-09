@@ -5,33 +5,21 @@ AI writing assistant Chrome extension — fix grammar, rewrite, translate, summa
 **GitHub:** https://github.com/shubhamns/ReplyPilotAI
 
 ```
-Chrome Extension → Background Worker → FastAPI → OpenAI GPT-4o mini
+Chrome Extension → Background Worker → FastAPI (SQLite) → OpenAI GPT-4o mini
 ```
 
-Each developer sets their **own API URL + OpenAI API key** in the extension **Settings (gear icon)**. Keys stay in `chrome.storage.local` (this browser only) and are sent as `X-OpenAI-Key` — not stored in backend `.env` or git.
+**Security model:** Enter your OpenAI API key in extension **Settings**. It is sent once to your backend, encrypted in SQLite, and not kept in the extension. Do not put OpenAI keys in `.env` or ship them in the extension build.
 
 ## Project structure
 
 ```
 ReplyPilotAI/
 ├── README.md
-├── PRIVACY.md
 ├── extension/   # Chrome MV3 (React + TypeScript + Vite + Tailwind)
-└── backend/     # FastAPI proxy to OpenAI
+└── backend/     # FastAPI + SQLite + OpenAI
 ```
 
-## Configure in the app (required)
-
-1. Open the extension popup
-2. Click the **gear** icon
-3. Set:
-   - **API URL** — your backend, e.g. `http://127.0.0.1:8000`
-   - **OpenAI API Key** — your key from https://platform.openai.com/api-keys
-4. Click **Save**
-
-Click the **GitHub** icon to open the repository.
-
-## Backend
+## Backend setup
 
 ```bash
 cd backend
@@ -39,18 +27,25 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
+# set APP_SECRET to a long random string
 ./run.sh
 ```
 
-`backend/.env` (no OpenAI key):
+`backend/.env`:
 
 ```env
 HOST=127.0.0.1
 PORT=8000
-REPLYPILOT_API_KEY=
+APP_SECRET=change-me-to-a-long-random-string
+DATABASE_PATH=./data/replypilot.db
 ```
 
-`REPLYPILOT_API_KEY` is optional — only if you want to protect a public host with a shared secret header.
+## Extension settings
+
+1. Open the extension popup → gear icon
+2. Set **API URL** (e.g. `http://127.0.0.1:8000`)
+3. Paste your **OpenAI API Key** (`sk-...`)
+4. Save — key is stored encrypted on the backend
 
 ## Load the extension
 
@@ -64,15 +59,16 @@ Chrome → `chrome://extensions` → Developer mode → **Load unpacked** → `e
 
 ## API
 
-All AI routes require `X-OpenAI-Key` from the extension Settings.
+| Method | Path | Notes |
+|--------|------|--------|
+| POST | `/api/accounts` | Save OpenAI key from Settings |
+| POST | `/api/reply` | Requires session from Settings |
+| POST | `/api/grammar` | |
+| POST | `/api/rewrite` | |
+| POST | `/api/translate` | |
+| POST | `/api/summarize` | |
 
-| Method | Path |
-|--------|------|
-| POST | `/api/reply` |
-| POST | `/api/grammar` |
-| POST | `/api/rewrite` |
-| POST | `/api/translate` |
-| POST | `/api/summarize` |
+CORS allows only `chrome-extension://` origins, methods `GET|POST|OPTIONS`, and headers `Content-Type` + `X-API-Key`.
 
 ## GitHub workflow
 

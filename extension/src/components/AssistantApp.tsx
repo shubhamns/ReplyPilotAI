@@ -7,7 +7,7 @@ import { GitHubButton, SettingsButton, SettingsPanel } from './SettingsPanel'
 import { TextPreview } from './TextPreview'
 import { ThemeToggle } from './ThemeToggle'
 import { ToneSelector } from './ToneSelector'
-import { copyToClipboard, getOpenAiApiKey, getSelectionFromActiveTab, replaceTextInActiveTab, runAiAction } from '../services/messaging'
+import { copyToClipboard, getAccessToken, getSelectionFromActiveTab, replaceTextInActiveTab, runAiAction } from '../services/messaging'
 import { applyTheme, getTheme, setTheme } from '../services/theme'
 import type { AiAction, RewriteTone, ThemeMode } from '../types'
 import { GITHUB_REPO_URL } from '../types'
@@ -43,8 +43,8 @@ export function AssistantApp({
       const t = await getTheme()
       setThemeState(t)
       applyTheme(t)
-      const key = await getOpenAiApiKey()
-      if (!key) setSettingsOpen(true)
+      const token = await getAccessToken()
+      if (!token) setSettingsOpen(true)
     })()
   }, [])
 
@@ -74,8 +74,8 @@ export function AssistantApp({
       setError('Select some text first')
       return
     }
-    const key = await getOpenAiApiKey()
-    if (!key) {
+    const token = await getAccessToken()
+    if (!token) {
       setError('Add your OpenAI API key in Settings')
       setSettingsOpen(true)
       return

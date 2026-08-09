@@ -17,19 +17,55 @@ export async function setApiBase(apiBase: string): Promise<void> {
   await chrome.storage.local.set({ apiBase: apiBase.replace(/\/$/, '') })
 }
 
-export async function getOpenAiApiKey(): Promise<string> {
+export async function getAccessToken(): Promise<string> {
   if (!isExtensionAlive()) return ''
   try {
-    const stored = await chrome.storage.local.get(['openaiApiKey'])
-    return (stored.openaiApiKey as string) || ''
+    const stored = await chrome.storage.local.get(['accessToken'])
+    return (stored.accessToken as string) || ''
   } catch {
     return ''
   }
 }
 
-export async function setOpenAiApiKey(openaiApiKey: string): Promise<void> {
+export async function setAccessToken(accessToken: string): Promise<void> {
   if (!isExtensionAlive()) throw new Error('Extension context invalidated')
-  await chrome.storage.local.set({ openaiApiKey })
+  const next = accessToken.trim()
+  if (!next) {
+    await chrome.storage.local.remove(['accessToken', 'openaiApiKey'])
+    return
+  }
+  await chrome.storage.local.set({ accessToken: next })
+  await chrome.storage.local.remove(['openaiApiKey'])
+}
+
+export async function hasSavedKey(): Promise<boolean> {
+  return Boolean(await getAccessToken())
+}
+
+export async function registerOpenAiKey(apiBase: string, openaiKey: string): Promise<string> {
+  const base = apiBase.replace(/\/$/, '')
+  let res: Response
+  try {
+    res = await fetch(`${base}/api/accounts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ openai_key: openaiKey.trim(), label: 'extension' }),
+      signal: AbortSignal.timeout(20000),
+    })
+  } catch {
+    throw new Error(`Cannot reach backend at ${base}`)
+  }
+  if (!res.ok) {
+    let detail = `Could not save OpenAI key (${res.status})`
+    try {
+      const data = await res.json() as { detail?: string }
+      if (typeof data.detail === 'string') detail = data.detail
+    } catch { /* ignore */ }
+    throw new Error(detail)
+  }
+  const data = await res.json() as { access_token: string }
+  if (!data.access_token) throw new Error('Backend did not return access token')
+  return data.access_token
 }
 
 export async function ensureHostPermission(apiBase: string): Promise<boolean> {
@@ -93,13 +129,20 @@ export async function runAiAction(request: AiRequest): Promise<AiResponse> {
 }
 
 export async function copyToClipboard(text: string): Promise<void> {
-  try {
-    if (navigator.clipboard?.writeText) {
+  const inFrame = (() => {
+    try {
+      return window.self !== window.top
+    } catch {
+      return true
+    }
+  })()
+  if (!inFrame && navigator.clipboard?.writeText) {
+    try {
       await navigator.clipboard.writeText(text)
       return
+    } catch {
+      // fall through to legacy copy
     }
-  } catch {
-    // fall through to legacy copy
   }
   const el = document.createElement('textarea')
   el.value = text
